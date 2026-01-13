@@ -24,7 +24,20 @@ app.use(cookieParser());
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      process.env.CLIENT_URL
+    ].filter(Boolean);
+
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 };
 
@@ -42,7 +55,7 @@ const io = new Server(server, {
 io.use(async (socket, next) => {
   try {
     let token = socket.handshake.auth.token;
-    
+
     // If no token in auth, try to get from cookies
     if (!token && socket.handshake.headers.cookie) {
       const cookies = socket.handshake.headers.cookie.split(';').reduce((acc, cookie) => {
@@ -52,14 +65,14 @@ io.use(async (socket, next) => {
       }, {});
       token = cookies.token;
     }
-    
+
     if (!token) {
       return next(new Error('Authentication error: No token provided'));
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select('-password');
-    
+
     if (!user) {
       return next(new Error('Authentication error: User not found'));
     }
@@ -96,9 +109,9 @@ app.use('/api/bids', require('./routes/bids'));
 // Error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    success: false, 
-    message: 'Something went wrong!' 
+  res.status(500).json({
+    success: false,
+    message: 'Something went wrong!'
   });
 });
 
